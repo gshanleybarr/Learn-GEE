@@ -1,0 +1,91 @@
+---
+title: "Learn GEE"
+author: "Joseph Holler"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Lean GEE
+
+-   Avoid treating observations from the same "cluster" as independent
+-   Examples of "clusters" include:
+    -   repeated measurements for the same person over time
+    -   surveys of multiple members of the same household
+    -   multiple observations in the same geographic region?
+-   Some approaches to resolving this problem include
+    -   discarding repeated observations
+    -   including repeated observations but calculating statistical power based on the number of clusters rather than the number of observations
+-   How can you use all the data points while also not exaggerating your statistical power?
+-   GEE uses "weighted combinations of observations to extract the appropriate amount of information from correlated data"
+
+Elements of notation:
+
+|        Variables        | Parameter Symbol | Statistic Symbol |
+|:-----------------------:|:----------------:|:----------------:|
+|        household        |       $h$        |                  |
+|          mean           |      $\mu$       |  $\overline{y}$  |
+|   standard deviation    |     $\delta$     |                  |
+|       proportion        |       $P$        |       $p$        |
+| regression coefficient  |       $B$        |       $b$        |
+| correlation coefficient |       $R$        |       $r$        |
+
+## Variance of Weighted Sum
+
+1.  Make a correlation matrix out of the variable and its weights
+2.  For each row/column combination, find: row-weight \* column-weight \* row-δ \* column-δ \* row-column-$R$
+3.  Sum the products from step 2
+
+- If there is no correlation, then off-diagonal R values are 0, and the weighted variance is simply the sum of squared weights and variances.
+- standard error of a mean is: $\mu$ / $\sqrt{n}$  ... and this is what you get if there is no correlation and equal weights in the sample
+- standard error of an estimate is basically the standard deviation of it... 
+- if data is correlated, the standard error increases (since you're no longer multiplying by 0 off-diagonal)
+
+## What if some observations are clustered?
+
+- three children: 1 single child and 2 siblings
+- optimal weight for observations correlated within clusters is: 1 / (1 + $R$($k$-1))  where $k$ is the size of the cluster
+- evidence that this is the optimal weight is shown in Figure 3 and described as provable with calculus on pg 368
+- as correlation within clusters approaches 1, the effective sample size of the study decreases to the number of clusters. This make sense, as perfect correlation with clusters means that a cluster is effectively a single observation
+
+## A challenge will be to estimate the global mean and global correlation
+
+Here is a process for the estimation:
+
+- start with assumption of no correlation $R$ = 0
+- calculate estimate of $\mu$ based on $R$ = 0
+- calculate new estimate $r$ of $R$
+- repeat until you reach convergence (no more change in $R$)
+
+```{r fig4}
+library("tidyverse")
+val <- c(15, 13, 10, 9, 8)
+grp <- c(1, 1, 2, 2, 2)
+
+# add code to count k members of each group
+
+fig4data <- data.frame(val, grp)
+fig4data <- fig4data %>% mutate(resid = val - mean(fig4data$val))
+resid <- fig4data$val - mean(fig4data$val)
+
+# estimated variance is sum of diagonal products divided by n(5) - 1
+v <- sum(resid^2) / (length(resid) - 1)
+
+# estimated covariance is sum of off-diagonal products divided by n(4) - 1
+c <- (resid[1] * resid[2] + 
+      resid[3] * resid[4] +
+      resid[3] * resid[5] +
+      resid[4] * resid[5] 
+      ) / 3
+
+# estimated correlation is estimated covariance / estimated variance
+r <- c / v
+
+# new weight is 1 / (1 + r(k-1))
+fig4data <- fig4data %>% mutate(s2w <- 1 / (1 + r(fig4data$k - 1)))
+```
+
+
