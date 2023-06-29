@@ -1,8 +1,11 @@
 ---
 title: "Learn GEE"
 author: "Joseph Holler"
-date: '`r Sys.Date()`'
-output: html_document
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  latex_engine: xelatex
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -50,7 +53,7 @@ Elements of notation:
 ## What if some observations are clustered?
 
 -   three children: 1 single child and 2 siblings
--   optimal weight for observations correlated within clusters is: 1 / (1 + $R$($k$-1)) where $k$ is the size of the cluster
+-   optimal weight for observations correlated within clusters is: 1 / (1 + $r$($k$-1)) where $k$ is the size of the cluster
 -   evidence that this is the optimal weight is shown in Figure 3 and described as provable with calculus on pg 368
 -   as correlation within clusters approaches 1, the effective sample size of the study decreases to the number of clusters. This make sense, as perfect correlation with clusters means that a cluster is effectively a single observation
 
@@ -89,8 +92,17 @@ covar_d <- sum(m, na.rm = TRUE) - 1
 Here is a process for the estimation:
 
 -   start with assumption of no correlation $R$ = 0
--   calculate estimate of $\mu$ based on $R$ = 0
--   calculate new estimate $r$ of $R$
+-   calculate estimate of $\mu$ based on $R$ = 0 (no auto-correlation)
+-   calculate new estimate $r$ of $R$ 
+-   recalculate $w$ weight for each observation as 1 / (1 + ($k$-1)$r$)
+
+```{r reweight function}
+reweight <- function(k, r) {
+    # new weight is 1 / (1 + (k-1)r)
+    return(1 / (1 + r * (k - 1)))
+}
+```
+
 -   Repeat until you reach convergence (no more change in $R$)
 
 ```{r fig4iterate}
@@ -100,7 +112,7 @@ iteration <- 1
 
 while(abs(r - r_prior) > 0.001){
   # new weight is 1 / (1 + (k-1)r)
-  fig4data <- fig4data %>% mutate(w = 1 / (1 + r * (fig4data$k - 1)))
+  fig4data <- fig4data %>% mutate(w = reweight(fig4data$k, r))
   
   # weighted mean
   mu <- sum(fig4data$val * fig4data$w) / sum(fig4data$w)
@@ -133,3 +145,25 @@ while(abs(r - r_prior) > 0.001){
 
 -   For regression, you would use find the within-cluster correlation of regression residuals to re-define weights. Therefore, I wonder if the geepack algorithm can output the residuals or even the final set of weights?
 -   Hierarchical & multilevel models estimate between-cluster variation and incorporate this into standard errors, while GEE does the opposite---estimating within-cluster correlation.
+
+Let's simulate the weights for observations within varying sizes of clusters
+
+```{r weight-by-cluster-size}
+# create simple data 
+cluster_size <- c(1, 2, 3, seq(5, 20, by = 5), seq(30, 50, by = 10))
+wbyk <- data.frame(cluster_size)
+rm(cluster_size)
+
+wbyk$r0_00 <- round(reweight(wbyk$cluster_size, 0), 2)
+wbyk$r0_25 <- round(reweight(wbyk$cluster_size, 0.25), 2)
+wbyk$r0_05 <- round(reweight(wbyk$cluster_size, 0.5), 2)
+wbyk$r1_00 <- round(reweight(wbyk$cluster_size, 1), 2)
+
+wbyk
+```
+
+-   If there is no correlation within clusters, then the $r$ will be 0 or near 0 and the weights will be near 1
+-   If there is perfect correlation, then $r$ will approach 1 and the weights will be 1 / `cluster size`.
+-   The implication is clear: if there is correlation within clusters, then then observations from small clusters weigh much more heavily than observations from large clusters. Keep in mind this is not correlation on a per cluster basis-- this is a single measure for within-cluster correlation for the whole dataset.
+-   In this scenario, outliers in large clusters will have little effect on the model fitting.
+-   However, outliers in small clusters will have an outsized effect on the model fit.
