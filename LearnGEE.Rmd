@@ -7,9 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library("tidyverse")
 ```
 
-## Lean GEE
+## Learn GEE
 
 -   Avoid treating observations from the same "cluster" as independent
 -   Examples of "clusters" include:
@@ -51,41 +52,80 @@ Elements of notation:
 - evidence that this is the optimal weight is shown in Figure 3 and described as provable with calculus on pg 368
 - as correlation within clusters approaches 1, the effective sample size of the study decreases to the number of clusters. This make sense, as perfect correlation with clusters means that a cluster is effectively a single observation
 
-## A challenge will be to estimate the global mean and global correlation
+## Estimating the mean and correlation
+
+```{r create-sample-data}
+# create simple data 
+val <- c(15, 13, 10, 9, 8)
+grp <- c(1, 1, 2, 2, 2)
+fig4data <- data.frame(val, grp)
+rm(val, grp)
+
+n <- length(fig4data$val)
+m <- matrix(nrow = n, ncol = n)
+
+fig4data <- fig4data %>% 
+  group_by(grp) %>% 
+  mutate(k = n(), w = 1 / n) %>% 
+  ungroup()
+
+for (x in 1:(n-1)){
+  for(y in (x+1):n){
+    if(fig4data[x,"grp"] == fig4data[y,"grp"]){
+      m[x,y] <- 1
+    }
+  }
+}
+
+var_d <- n - 1
+covar_d <- sum(m, na.rm = TRUE) - 1
+```
 
 Here is a process for the estimation:
 
 - start with assumption of no correlation $R$ = 0
 - calculate estimate of $\mu$ based on $R$ = 0
 - calculate new estimate $r$ of $R$
-- repeat until you reach convergence (no more change in $R$)
+- Repeat until you reach convergence (no more change in $R$)
 
-```{r fig4}
-library("tidyverse")
-val <- c(15, 13, 10, 9, 8)
-grp <- c(1, 1, 2, 2, 2)
+```{r fig4iterate}
+r_prior <- 1
+r <- 0
+iteration <- 1
 
-# add code to count k members of each group
+while(abs(r - r_prior) > 0.001){
+  # new weight is 1 / (1 + (k-1)r)
+  fig4data <- fig4data %>% mutate(w = 1 / (1 + r * (fig4data$k - 1)))
+  
+  # weighted mean
+  mu <- sum(fig4data$val * fig4data$w) / sum(fig4data$w)
+  
+  resid <- fig4data$val - mu
+  
+  # estimated variance is sum of diagonal products divided by n(5) - 1
+  v <- sum(resid^2) / var_d
+  
+  # estimated covariance is sum of off-diagonal products divided by n(4) - 1
+  c <- sum(outer(resid, resid, "*") * m, na.rm = TRUE) / covar_d
+  
+  # estimated correlation is estimated covariance / estimated variance
+  r_prior <- r
+  r <- c / v
 
-fig4data <- data.frame(val, grp)
-fig4data <- fig4data %>% mutate(resid = val - mean(fig4data$val))
-resid <- fig4data$val - mean(fig4data$val)
-
-# estimated variance is sum of diagonal products divided by n(5) - 1
-v <- sum(resid^2) / (length(resid) - 1)
-
-# estimated covariance is sum of off-diagonal products divided by n(4) - 1
-c <- (resid[1] * resid[2] + 
-      resid[3] * resid[4] +
-      resid[3] * resid[5] +
-      resid[4] * resid[5] 
-      ) / 3
-
-# estimated correlation is estimated covariance / estimated variance
-r <- c / v
-
-# new weight is 1 / (1 + r(k-1))
-fig4data <- fig4data %>% mutate(s2w <- 1 / (1 + r(fig4data$k - 1)))
+  cat("iteration:", iteration, "\n",
+      "weighted mean:", mu, "\n",
+      "variance:", v, "\n",
+      "covariance:", c, "\n",
+      "correlation:", r, "\n",
+      "effective sample size:", sum(fig4data$w), "\n\n"
+      )
+  
+  iteration <- iteration + 1
+}
 ```
 
+### Discussion notes
 
+- For regression, you would use find the within-cluster correlation of regression residuals to re-define weights.
+Therefore, I wonder if the geepack algorithm can output the residuals or even the final set of weights?
+- Hierarchical & multilevel models estimate between-cluster variation and incorporate this into standard errors, while GEE does the opposite---estimating within-cluster correlation.
