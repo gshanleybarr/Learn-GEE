@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library("tidyverse")
 ```
 
+This learning exercise is based upon Hanley et al (2003), <https://doi.org/10.1093/aje/kwf215>
+
 ## Learn GEE
 
 -   Avoid treating observations from the same "cluster" as independent
@@ -40,19 +42,22 @@ Elements of notation:
 2.  For each row/column combination, find: row-weight \* column-weight \* row-δ \* column-δ \* row-column-$R$
 3.  Sum the products from step 2
 
-- If there is no correlation, then off-diagonal R values are 0, and the weighted variance is simply the sum of squared weights and variances.
-- standard error of a mean is: $\mu$ / $\sqrt{n}$  ... and this is what you get if there is no correlation and equal weights in the sample
-- standard error of an estimate is basically the standard deviation of it... 
-- if data is correlated, the standard error increases (since you're no longer multiplying by 0 off-diagonal)
+-   If there is no correlation, then off-diagonal R values are 0, and the weighted variance is simply the sum of squared weights and variances.
+-   standard error of a mean is: $\mu$ / $\sqrt{n}$ ... and this is what you get if there is no correlation and equal weights in the sample
+-   standard error of an estimate is basically the standard deviation of it...
+-   if data is correlated, the standard error increases (since you're no longer multiplying by 0 off-diagonal)
 
 ## What if some observations are clustered?
 
-- three children: 1 single child and 2 siblings
-- optimal weight for observations correlated within clusters is: 1 / (1 + $R$($k$-1))  where $k$ is the size of the cluster
-- evidence that this is the optimal weight is shown in Figure 3 and described as provable with calculus on pg 368
-- as correlation within clusters approaches 1, the effective sample size of the study decreases to the number of clusters. This make sense, as perfect correlation with clusters means that a cluster is effectively a single observation
+-   three children: 1 single child and 2 siblings
+-   optimal weight for observations correlated within clusters is: 1 / (1 + $R$($k$-1)) where $k$ is the size of the cluster
+-   evidence that this is the optimal weight is shown in Figure 3 and described as provable with calculus on pg 368
+-   as correlation within clusters approaches 1, the effective sample size of the study decreases to the number of clusters. This make sense, as perfect correlation with clusters means that a cluster is effectively a single observation
 
 ## Estimating the mean and correlation
+
+First, create sample data and calculate a matrix to use as a mask for the off-diagonal products for calculating variance.
+Also calculate the denominators for variance and covariance calculations.
 
 ```{r create-sample-data}
 # create simple data 
@@ -83,10 +88,10 @@ covar_d <- sum(m, na.rm = TRUE) - 1
 
 Here is a process for the estimation:
 
-- start with assumption of no correlation $R$ = 0
-- calculate estimate of $\mu$ based on $R$ = 0
-- calculate new estimate $r$ of $R$
-- Repeat until you reach convergence (no more change in $R$)
+-   start with assumption of no correlation $R$ = 0
+-   calculate estimate of $\mu$ based on $R$ = 0
+-   calculate new estimate $r$ of $R$
+-   Repeat until you reach convergence (no more change in $R$)
 
 ```{r fig4iterate}
 r_prior <- 1
@@ -126,6 +131,5 @@ while(abs(r - r_prior) > 0.001){
 
 ### Discussion notes
 
-- For regression, you would use find the within-cluster correlation of regression residuals to re-define weights.
-Therefore, I wonder if the geepack algorithm can output the residuals or even the final set of weights?
-- Hierarchical & multilevel models estimate between-cluster variation and incorporate this into standard errors, while GEE does the opposite---estimating within-cluster correlation.
+-   For regression, you would use find the within-cluster correlation of regression residuals to re-define weights. Therefore, I wonder if the geepack algorithm can output the residuals or even the final set of weights?
+-   Hierarchical & multilevel models estimate between-cluster variation and incorporate this into standard errors, while GEE does the opposite---estimating within-cluster correlation.
