@@ -3,9 +3,9 @@ title: "Learn GEE"
 author: "Joseph Holler"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
-  latex_engine: xelatex
   html_document: default
+  latex_engine: xelatex
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
